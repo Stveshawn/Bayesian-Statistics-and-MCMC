@@ -1,0 +1,37 @@
+---
+title: "Metropolis Hastings"
+author: "Stve Shao"
+date: "2018/10/17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 
+sampling from truncated normal $N_{(-1,1)}(0,1)$
+
+$\pi(x)\propto \exp(-x^2/2)I(0\leq x\leq3)$
+
+proposal kernel is $N(x|x^{(j)},1)$
+
+```{r}
+x0 = 0
+t = 10000 # iterations
+X = x0
+x_old = x0
+for(i in 1:t) {
+  x = rnorm(1, x_old, 1)
+  u = runif(1, 0, 1)
+  prob = exp(-x^2/2) * (x>-1 & x<1) / exp(-x_old^2/2) * (x_old>-1 & x_old<1) 
+  if(u < prob) {
+    X = c(X, x)
+    x_old = x
+  } else {
+    X = c(X, x_old)
+  }
+}
+hist(X, xlim = c(-2,2))
+```
+
