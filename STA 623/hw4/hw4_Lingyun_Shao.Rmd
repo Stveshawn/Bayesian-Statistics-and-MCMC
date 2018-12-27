@@ -1,0 +1,141 @@
+---
+title: "STA 623 homework 4"
+author: "Lingyun Shao"
+date: "Oct. 10, 2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+```
+
+# Problem Statement
+
+Consider the first problem on the exam, where $X\sim Binomial(n,\theta),n=10$. $X$ is the number of questions correct.
+
+$$
+\delta_\tau(x)=\begin{cases}
+1\ \ x>\tau, \ hire\\
+0\ \ x\leq\tau, \ don't\ hire
+\end{cases}
+$$
+
+$L(\theta,a)=$ loss function, which increases linearly with $\theta$ if $a=0$ and increases linearly with $(1-\theta)$ if $a=1$.
+
+(1) Calculate expected posterior loss of $\delta$ and find the Bayes optimal $\tau$. [analytically]
+
+Suppose our prior for $\theta$, $\pi(\theta)$ is $Beta(1,1)$, then the posterior is
+
+$$
+\pi(\theta|x)\propto \pi(\theta)p(x|\theta)\propto\theta^x(1-\theta)^{10-x}
+$$
+
+Judging from the kernel, we know $\theta|x \sim Beta(x+1,11-x)$
+
+If we give the simple loss function as $L=I_{x\leq\tau}\times\theta+I_{x>\tau}\times(1-\theta)$, the Bayesian expected loss can be written as
+
+$$
+\begin{split}
+\rho(a,x)&=E_{\theta|x}[L(\theta,a)]\\
+&=I_{x\leq\tau}E[\theta|x]+I_{x>\tau}E[(1-\theta)|x]\\
+&=I_{x\leq\tau}\frac{x+1}{12}+I_{x>\tau}\frac{11-x}{12}\\
+&=I_{x\leq\tau}\frac{x+1}{12}+(1-I_{x\leq\tau})\frac{11-x}{12}\\
+&=\frac{11-x}{12}+I_{x\leq\tau}\frac{2x-10}{12}
+\end{split}
+$$
+
+When
+
+$\tau=0,\ \rho=1/12,10/12,9/12,...,1/12$ for $x=0,...,10$;
+
+$\tau=1,\ \rho=1/12,2/12,9/12,...,1/12$ for $x=0,...,10$;
+
+$\tau=2,\ \rho=1/12,...,3/12,8/12,...,1/12$ for $x=0,...,10$;
+
+$\tau=3,\ \rho=1/12,...,4/12,7/12...,1/12$ for $x=0,...,10$;
+
+$\tau=4,\ \rho=1/12,...,5/12,6/12,5/12...,1/12$ for $x=0,...,10$;
+
+$\tau=5,\ \rho=1/12,...5/12,6/12,5/12,...,1/12$ for $x=0,...,10$;
+
+$\tau=6,\ \rho=1/12,...,5/12,6/12,7/12,4/12,...,1/12$ for $x=0,...,10$;
+
+$\cdots$
+
+So we know that the Bayes optimal $\tau$ is 4 and 5. More generally, if $\tau$ can be non-integer, the Bayes optimal $\tau\in[4,6)$.
+
+
+(2) Repeat the exercise assuming you use Monte Carlo integration and avoid calculating integrals. How do the results differ?
+
+Suppose we have the same prior $\pi(\theta)$ and thus the same posterior $\pi(\theta|x)$, $Beta(x+1,11-x)$. We can generate some data from our posterior distribution and plug them in the formula to estimate our expected posterior loss using Monte Carlo
+
+
+```{r}
+eloss = function(tau, x) {
+  n = 100000 # sample size
+  r = rbeta(n, x+1, 11-x)
+  l = mean((x>tau) * (1-r) + (x<=tau) * r)
+  return(l)
+}
+Loss.mc = NULL
+for(tau in 0:10) {
+  loss = NULL
+  for(x in 0:10) {
+    loss = c(loss, eloss(tau, x))
+  }
+  Loss.mc = rbind(Loss.mc, loss)
+}
+rownames(Loss.mc) = paste('tau =', 0:10)
+colnames(Loss.mc) = paste('x =', 0:10)
+kable(round(Loss.mc, 4), caption = 'expected loss using MC')
+Loss.theo = NULL
+for(tau in 0:10) {
+  loss = NULL
+  for(x in 0:10) {
+    l = (11-x)/12 + (x<=tau) * (2*x-10)/12
+    loss = c(loss, l)
+  }
+  Loss.theo = rbind(Loss.theo, loss)
+}
+rownames(Loss.theo) = paste('tau =', 0:10)
+colnames(Loss.theo) = paste('x =', 0:10)
+kable(round(Loss.theo, 4), caption = 'theoretical expected loss')
+
+kable(round(Loss.mc-Loss.theo, 4), caption = 'difference of MC method and theoretical method')
+```
+
+Comparing the expected posterior loss given different $\tau$ and $x$, we find that when sample size is sufficiently large, using Monte Carlo method and theoretical method are almost the same. And by drawing the plot of expected loss over different $x$'s for different $\tau$'s, we know that the Bayes optimal $\tau$ when using MC method is also 4 and 5 (more specifically $[4,6)$ ).
+
+```{r, fig.height=12, fig.width=9}
+par(mfrow = c(4,3))
+for(i in 0:10) {
+  plot(Loss.mc[i+1,], type = 'l', ylim = c(0, 1),
+       xlab = 'x', ylab = 'loss',
+       main = paste0('tau = ',i), col = 2, lwd = 2)
+  for(j in 0:i) {
+    lines(Loss.mc[j+1,])
+  }
+}
+```
+
+
+Besides, we can change the sample size and draw a plot displaying the convergence of $\rho=1/12$ when $\tau=0,x=0$.
+
+```{r}
+eloss.p = function(n, tau=0, x=0) {
+  r = rbeta(n, x+1, 11-x)
+  l = mean((x>tau) * (1-r) + (x<=tau) * r)
+  return(l)
+}
+par(mfrow = c(1,1))
+est = NULL
+s = (1:50)^3
+for(n in s) {
+  est = c(est, eloss.p(n))
+}
+plot(s, est, type = 'l', xlab = 'sample size', ylab = 'MC estimate',
+     main = 'Convergence of MC estimate')
+abline(h=1/12, col=2, lwd = 2, lty =2)
+```
+

@@ -1,0 +1,261 @@
+---
+title: "STA 623 homework 1"
+author: "Lingyun Shao, MS stats"
+date: "Aug. 30, 2018"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Problem Statement
+
+We are betting on a basketball game of Duke vs. UNC. Suppose there are two possible results
+$$\theta=\begin{cases}
+1,&Duke\ \ wins\\
+0,&UNC\ \ wins
+\end{cases}$$
+
+Therefore, $\Theta=\left\{Duke\ \ wins,\ UNC\ \ wins\right\}$. The probability of Duke winning this game is assumed to be $\pi$ (i.e. $Pr(\theta=1)=\pi$). We need to decide who we should bet on and how much to bet to win as much as possible. The decision is denoted by $d$, which means we bet $d\$$ on Duke. Thus, the decision space $D$ here is $\mathbb R$, where $d<0$ means that we bet $|d|\$$ on UNC.
+\par
+
+Given the loss function $L(d,\theta)=I_{\left\{\theta=0\right\}}d+I_{\left\{\theta=1\right\}}(-d)$, we can easily calculate the expectation of the loss function $E_{\theta}[L(d,\theta)]$, which we defines as a risk function $R(d)$ of action $d$.
+\begin{eqnarray*}
+R(d)&\triangleq&E_{\theta}[L(d,\theta)]\\
+		&=&E_{\theta}[I_{\left\{\theta=0\right\}}d+I_{\left\{\theta=1\right\}}(-d)]\\
+		&=&(1-\pi)d+\pi(-d)\\
+		&=&(1-2\pi)d
+	\end{eqnarray*}
+	
+Obviously, if $\pi>\frac{1}{2}$, then $1-2\pi<0$, we want $d$ to be positive so that the expected loss (i.e. risk function) is as small as possible. Furthermore, $d$ is supposed be as large as possible to get the smallest $R(d)$, that is $d=\infty$. Similarly, if $\pi<\frac{1}{2}$, our best decision is betting $d=-\infty$.
+
+&nbsp;
+
+#Requirements
+However, results based on this loss function are not satisfactory enough. We need to
+\begin{itemize}
+\item Propose a "better" loss function for the above problem.
+
+\item Justify the choice (in words).
+
+\item Show a non-degenerate decision that minimizes the expected loss $R(d)$.
+\end{itemize}
+
+#Solutions
+The original loss function is somewhat flawed for it gives a linear loss function of $d$ given $\theta$, which is not appropriate in real settings. 
+If the loss function is linear, people will always bet infinity on the superior side, which is never a possible decision in real life. They can never bet infinity.
+
+People's decisions are usually bounded by the accelerating increase on losses, which means that more losses should be placed on $L(d,\theta)$ when they lose a comparatively large $|d|$.
+
+##1.Piecewise linear loss function
+####1.1 Loss function
+One possible way is to give a threshold. Any bet beyond this threshold brings more losses.
+Here I propose a piecewise linear loss function and use parameters to discuss decision making on a more general basis.
+When the thresholds of bet, $b\$$ or $-b\$$ ($b>0$) are not reached, the loss is the amount of money we lose, $d$. When we bet more than the threshold, the extra loss would increase to $k$ ($k>1$) times, meaning the loss is $k(d-b)+b$ or $-k(d+b)-b$.
+
+```{r loss1,echo=FALSE,fig.height=3.4,fig.width=6}
+p0=par()
+par(mfrow=c(1,2), oma = c(0, 0, 1, 0))
+plot(0,0,type='n',bty='l',xlim=c(-20,40),ylim=c(-20,60),xaxt='n',yaxt='n',xlab='',ylab=expression(paste('L(d,',theta,')')),main=expression(paste(theta, ' = 0')))
+lines(c(-20,20),c(-20,20),type='l')
+lines(c(20,40),c(20,60),type='l')
+axis(1,20,labels = 'b')
+axis(1,0,labels = 0)
+axis(1,30,labels = 'd')
+axis(2,40,labels = 'k(d-b)+b')
+arrows(20,20,20,-20, length = 0,lty = 2)
+arrows(30,40,30,-20, length = 0,lty = 2)
+arrows(30,40,-20,40, length = 0,lty = 2)
+
+
+plot(0,0,type='n',bty='l',xlim=c(-40,20),ylim=c(-20,60),xaxt='n',yaxt='n',xlab='',ylab=expression(paste('L(d,',theta,')')),main=expression(paste(theta, ' = 1')))
+lines(c(-40,-20),c(60,20),type='l')
+lines(c(-20,20),c(20,-20),type='l')
+axis(1,-20,labels = '-b')
+axis(1,0,labels = 0)
+axis(1,-30,labels = 'd')
+axis(2,40,labels = '-k(d+b)+b')
+arrows(-20,20,-20,-20, length = 0,lty = 2)
+arrows(-30,40,-30,-20, length = 0,lty = 2)
+arrows(-30,40,-40,40, length = 0,lty = 2)
+mtext(expression(paste('Loss-d given ',theta)), side = 3, line = 0, outer = T)
+```
+
+The losses given $\theta=0$ and $\theta=1$ are illustrated. The piecewise linear loss function is given as:
+\begin{eqnarray*}
+L(d,\theta)&=&I_{\left\{\theta=0\right\}}I_{\left\{d\leq b\right\}}d\\
+		&+&I_{\left\{\theta=0\right\}}I_{\left\{d > b\right\}}[k(d-b)+b]\\
+		&+&I_{\left\{\theta=1\right\}}I_{\left\{d\geq -b\right\}}(-d)\\
+		&+&I_{\left\{\theta=1\right\}}I_{\left\{d<-b\right\}}[-k(d+b)+b]
+	\end{eqnarray*}
+
+####1.2 Justification
+This is a better loss function than the previous one because it penalizes the decision of betting too much by adding more losses to the loss function when we lose. Thus, it can, to some extent, prevent people from betting infinity, which is not possible in real world, and constrain $d$ to a more reasonable amount. So the decision based on this piecewise loss function is much more reasonable than the  previous one.
+
+
+####1.3 Optimization
+We can get risk function, $R(d)$, by calculating $E_{\theta}[L(d,\theta)]$
+
+\begin{eqnarray*}
+R(d)&=&E_{\theta}[L(d,\theta)]\\
+    &=&(1-\pi)I_{\left\{d\leq b\right\}}d\\
+		&+&(1-\pi)(1-I_{\left\{d \leq b\right\}})[k(d-b)+b]\\
+		&+&\pi I_{\left\{d\geq -b\right\}}(-d)\\
+		&+&\pi (1-I_{\left\{d\geq-b\right\}})[-k(d+b)+b]
+	\end{eqnarray*}
+
+Rearranging the terms in different situations, we get
+\begin{itemize}
+\item when $d\in[-b,b]$
+$$R(d)=(1-2\pi)d$$
+\item when $d \in (-\infty,-b)$
+$$R(d)=[1-(k+1)\pi](d+b)+(2\pi-1)b$$
+\item when $d \in (d,\infty)$
+$$R(d)=[k-(k+1)\pi](d-b)+(1-2\pi)b$$
+\end{itemize}
+
+```{r rd1,echo=FALSE}
+R=function(d,k,b,pi){
+  if(d< -b)
+    r=(1-pi-k*pi)*(d+b)+(2*pi-1)*b
+  else if(d>b)
+    r=(k-k*pi-pi)*(d-b)+(1-2*pi)*b
+  else
+    r=(1-2*pi)*d
+  return(r)
+}
+```
+
+R(d) is a continuous piecewise linear function, indicating our risk (expected loss) of choosing decision $d$. The decision $d$ that minimizes R(d) is our best strategy. The value of $\pi$ significantly influences the shape of $R(d)$.
+
+```{r rp2,echo=FALSE,fig.height=5.5}
+par(mfrow=c(2,2),oma=c(0,0,2,0))
+
+x=seq(-40,40)
+y=c()
+for(i in x){
+  y=c(y,R(i,2,20,0.3))
+}
+plot(x,y,type='l',xlab='d',xaxt='n',ylab='R(d)',yaxt='n',main='(a)')
+axis(1,-20,labels='-b')
+axis(1,20,labels='b')
+
+x=seq(-40,40)
+y=c()
+for(i in x){
+  y=c(y,R(i,2,20,0.4))
+}
+plot(x,y,type='l',xlab='d',xaxt='n',ylab='R(d)',yaxt='n',main='(b)')
+axis(1,-20,labels='-b')
+axis(1,20,labels='b')
+
+x=seq(-40,40)
+y=c()
+for(i in x){
+  y=c(y,R(i,2,20,0.6))
+}
+plot(x,y,type='l',xlab='d',xaxt='n',ylab='R(d)',yaxt='n',main='(c)')
+axis(1,-20,labels='-b')
+axis(1,20,labels='b')
+
+x=seq(-40,40)
+y=c()
+for(i in x){
+  y=c(y,R(i,2,20,0.7))
+}
+plot(x,y,type='l',xlab='d',xaxt='n',ylab='R(d)',yaxt='n',main='(d)')
+axis(1,-20,labels='-b')
+axis(1,20,labels='b')
+mtext(expression(paste('Expected loss given different ',pi)), side = 3, line = 0, outer = T)
+```
+
+\begin{itemize}
+\item when $\pi \in(0,\frac{1}{k+1})$, $0<[1-(k+1)\pi]<(1-2\pi)<[k-(k+1)\pi]$, the function of $R(d)$ looks like (a)
+\item when $\pi \in[\frac{1}{k+1},\frac{1}{2})$, $[1-(k+1)\pi]\leq0<(1-2\pi)<[k-(k+1)\pi]$, the function of $R(d)$ looks like (b)
+\item when $\pi \in[\frac{1}{2},\frac{k}{k+1}]$, $[1-(k+1)\pi]<(1-2\pi)\leq0 \leq[k-(k+1)\pi]$, the function of $R(d)$ looks like (c)
+\item when $\pi \in(\frac{k}{k+1},1)$, $[1-(k+1)\pi]<(1-2\pi)<[k-(k+1)\pi]\leq0$, the function of $R(d)$ looks like (d)
+\end{itemize}
+
+We can see from the figures that R(d) has minimums when $\pi\in [\frac{1}{k+1},\frac{k}{k+1}]$, which are obtained at $d=-b$ and $d=b$. Also we can see from the figures that when $\pi \in(0,\frac{1}{k+1})$ or $\pi \in (\frac{k}{k+1},1)$, there are no minimums. 
+
+Thus, we conclude that the decision that minimizes expected loss is
+
+$$d=\begin{cases}
+  -\infty,&\pi\in(0,\frac{1}{k+1})\\
+  -b,&\pi\in[\frac{1}{k+1},\frac1 2)\\
+  b,& \pi\in[\frac1 2,\frac{k}{k+1}]\\
+  \infty,&\pi\in(\frac{k}{k+1},1)
+\end{cases}$$
+
+To always get a non-degenerate decision, k needs to approach $\infty$, which means the loss of betting more than $b\$$ on the losing side is positive infinity, so that the optimal decision becomes
+$$d=\begin{cases}
+  -b,&\pi\in(0,\frac{1}{2})\\
+  b,& \pi\in[\frac1 2,1)
+\end{cases}$$
+
+##2.Differentiable loss function
+
+####2.1 Loss function
+Another way of improving the original function is by introducing a continuous loss function whose value increases exponentially when the losing amount $|d|$ gets absurbly huge. Exponential functions are definitely a good choice. I propose the loss function
+$$L(d,\theta)=I_{\left\{\theta=0\right\}}(e^d-1)+I_{\left\{\theta=1\right\}}(e^{-d}-1)$$
+
+By subtracting 1 from the exponential functions, I just want the decision of betting $0\$$ to have a loss of $0$ (actually it has no effect on our decision making).
+
+```{r loss2,echo=FALSE,fig.height=4}
+x=seq(-3,3,by=0.01)
+par(mfrow=c(1,2), oma = c(0, 0, 2.5, 0))
+plot(x,exp(x)-1,type='l',xaxt='n',yaxt='n',ylim=c(-2,exp(3)-1),xlab = 'd',ylab= expression(paste('L(d,',theta,')')),main = expression(paste(theta,'= 0')))
+abline(h=-1,lty=2)
+axis(2,-1,labels = '-1')
+axis(1,0,labels = '0')
+
+plot(x,exp(-x)-1,type='l',xaxt='n',yaxt='n',ylim=c(-2,exp(3)-1),xlab = 'd',ylab= expression(paste('L(d,',theta,')')),main = expression(paste(theta,'= 1')))
+abline(h=-1,lty=2)
+axis(2,-1,labels = '-1')
+axis(1,0,labels = '0')
+
+mtext(expression(paste('Loss-d given ',theta)), side = 3, line = 0, outer = T)
+```
+
+#### 2.2 Justification
+I think the justification for this loss is:
+\begin{itemize}
+\item It penalizes the action of betting way too much by using a exponentially growing loss, thus preventing the decision of betting infinity from happening
+\item The negative loss is bounded and the derivative of loss function decreases as d approaches $-\infty$. It's getting harder to be satisfy people when they have more by the Law of diminishing marginal utility.
+\end{itemize}
+
+This loss function may apply well to meticulous decision makers. 
+
+#### 2.3 Optimization
+By calculating the expectation, we get risk function $R(d)$
+
+\begin{eqnarray*}
+R(d)&=&E_{\theta}[L(d,\theta)]\\
+    &=&E_{\theta}[I_{\left\{\theta=0\right\}}(e^d-1)+I_{\left\{\theta=1\right\}}(e^{-d}-1)]\\
+    &=&(1-\pi)(e^d-1)+\pi(e^{-d}-1)
+	\end{eqnarray*}
+
+```{r risk2,echo=FALSE}
+d=seq(-2,2,by=0.01)
+pi=0.8
+r=(1-pi)*(exp(d)-1)+pi*(exp(-d)-1)
+plot(d,r,type = 'l',ylim = c(-1,5),xaxt='n',yaxt='n',xlab='d',ylab='R(d)',main='Risk function (expected loss)')
+arrows(log(sqrt(pi/(1-pi))),2*sqrt(pi*(1-pi))-1,log(sqrt(pi/(1-pi))),-2,length = 0,lty=2)
+arrows(log(sqrt(pi/(1-pi))),2*sqrt(pi*(1-pi))-1,-3,2*sqrt(pi*(1-pi))-1,length = 0,lty=2)
+axis(1,log(sqrt(pi/(1-pi))),labels=expression('d'['opt']))
+axis(2,2*sqrt(pi*(1-pi))-1,labels=expression('R'['min']))
+```
+
+Then calculate the first and second derivative of $R(d)$. To avoid confusion, we use the notation $x$ for the original variable $d$.
+$$\frac{dR(x)}{dx}=(1-\pi)e^x-\pi e^{-x}$$
+$$\frac{d^2R(x)}{dx^2}=(1-\pi)e^x+\pi e^{-d}>0$$
+
+Given $\frac{d^2R(x)}{dx^2}>0$, by letting $\frac{dR(x)}{dx}=0$, we have $x=\mathrm {ln}\sqrt{\frac{\pi}{1-\pi}}$. So the minimum of risk function is obtained at the optimal decision $d_{opt}=\mathrm {ln}\sqrt{\frac{\pi}{1-\pi}}$ and the minimum is $(2\sqrt{\pi(1-\pi)}-1)$.
+
+Notice that even when $\pi=0.9$, the optimal decision $d_{opt}=ln(\sqrt\frac{0.9}{0.1})=1.099$, which is very small. It seems that people are really cautious and conservative when making decisions by this loss function. 
+
+More generally the loss function can be further adjusted by adding a multiplier $\rho\in(0,1)$ to $d$, to loosen the penalty on large $d's$.
+When $L(d,\theta)=I_{\left\{\theta=0\right\}}(e^{\rho d}-1)+I_{\left\{\theta=1\right\}}(e^{-\rho d}-1)$,  consequently $d_{opt}=\frac{1}{\rho}\mathrm{ln}(\sqrt{\frac{\pi}{1-\pi}})$, and people get more audacious by this loss function.
