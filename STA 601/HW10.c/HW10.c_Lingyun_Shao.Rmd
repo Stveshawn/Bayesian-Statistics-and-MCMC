@@ -1,0 +1,457 @@
+---
+title: 'STA 601 Homework 10c'
+author: 'Lingyun Shao'
+date: 'Dec. 03, 2018'
+output: pdf_document
+---
+
+```{r setup, include=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(knitr)
+library(mvtnorm)
+library(purrr)
+library(MASS)
+library(MCMCpack)
+library(invgamma)
+library(stringr)
+library(diagram)
+library(gridExtra)
+```
+
+# 11.4
+
+Hierarchical logistic regression: The Washington Assessment of Student Learning (WASL) is a standardized test given to students in the state of Washington. Letting $j$ index the counties within the state of Washington and $i$ index schools within counties, the file `mathstandard.dat` includes data on the following variables:
+
+$y_{i,j} =$ the indicator that more than half the 10th graders in school $i, j$ passed the WASL math exam;
+
+$x_{i,j} =$ the percentage of teachers in school $i$, $j$ who have a masters degree.
+
+In this exercise we will construct an algorithm to approximate the posterior distribution of the parameters in a generalized linear mixed-effects model for these data. The model is a mixed effects version of logistic regression:
+
+$y_{i,j} \sim binomial(e^{\gamma_{i,j}} /[1 + e^{\gamma_{i,j}} ])$, where $\gamma_{i,j} = \beta_{0,j} + \beta_{1,j}x_{i,j}$
+
+$\beta_1,...,\beta_J\sim i.i.d.$ multivariate normal $(\theta,\Sigma)$, where $\beta_j = (\beta_{0,j} , \beta_{1,j})$
+
+a) The unknown parameters in the model include population-level parameters $\left\{\theta,\Sigma\right\}$ and the group-level parameters $\left\{\beta_1,...,\beta_m\right\}$. Draw a diagram that describes the relationships between these parameters, the data $\left\{y_{i,j} , x_{i,j},i=1, . . . , n_j,j = 1, . . . ,m\right\}$, and prior distributions.
+
+```{r, echo = FALSE}
+names = c(expression(list(theta, Sigma)),
+expression(beta[1]), expression(...), expression(beta[m]),
+expression(gamma[1, 1]), expression(...), expression(gamma[n[1], 1]),
+expression(...),
+expression(gamma[1, m]), expression(...), expression(gamma[n[m], m]),
+expression(Y[1, 1]), expression(...), expression(Y[n[1], 1]),
+expression(...),
+expression(Y[1, m]), expression(...), expression(Y[n[m], m]))
+M = matrix(0, nrow = 18, ncol = 18)
+M[2, 1] = M[4, 1] = ""
+M[5, 2] = M[7, 2] = M[9, 4] = M[11, 4] = ""
+M[12, 5] = M[14, 7] = M[16, 9] = M[18, 11] = ""
+plotmat(M, pos = c(1, 3, 7, 7), curve = 0, name = names,
+box.size = 0.02, box.lcol = "white", shadow.col = "white",
+txt.font = 2)
+```
+
+
+\ 
+
+According to the diagram, we can see that our data is connected to the global parameters $\theta, \Sigma$ only through the group parameter $\beta_j$ and each $\beta_j$ is connected to our data via the binomial likelihood of logistic regression.
+
+```{r}
+d = read.table(file = 'http://www2.stat.duke.edu/~pdh10/FCBS/Exercises/mathstandard.dat',
+                   header = TRUE, sep = '\t')
+math = data_frame(
+  county = d[,1] %>% str_extract('[:alpha:].+[:alpha:]'),
+  metstandard = d[,1] %>% str_extract('\\b\\d{1}\\b') %>% as.numeric(),
+  percentms = d[,1] %>% str_extract('\\b\\d+\\.\\d+\\b') %>% as.numeric()
+)
+
+```
+
+
+b) Before we do a Bayesian analysis, we will get some ad hoc estimates of these parameters via maximum likelihood: Fit a separate logistic regression model for each group, possibly using the glm command in R via `beta. j <- glm(y.j~X.j,family=binomial)$coef`. Explain any problems you have with obtaining estimates for each county. Plot $\exp\left\{\hat\beta_{0,j} +\hat\beta_{1,j}x\right\}/(1 + \exp\left\{\hat\beta_{0,j} +\hat\beta_{1,j}x\right\})$ as a function of $x$ for each county and describe what you see. Using maximum likelihood estimates only from those counties with 10 or more schools, obtain ad hoc estimates $\hat\theta$ and $\hat\Sigma$ of $\theta$ and $\Sigma$. Note that these estimates may not be representative of patterns from schools with small sample sizes.
+
+```{r, fig.height= 10, fig.width= 8 }
+counties = math$county %>% unique()
+res = NULL
+for(ct in counties) {
+  math_ct = math %>%
+    filter(county == ct)
+  m = glm(data = math_ct, metstandard~percentms,family=binomial)
+  res = rbind(
+    res,
+    data_frame(
+      county = ct,
+      schools = nrow(math_ct),
+      b0 = m$coef[1],
+      b1 = m$coef[2]
+    )
+  )
+}
+
+```
+
+\ 
+
+From the warnings message, we can know that there are 2 problems with fitting models:
+
+1. There are several (4) counties that have perfectly separable data, thus making the algorithm not converging. So the estimates are not very reliable.
+
+2. There are several (4) counties with only one sample, resulting in NA in coefficient estimates.
+
+Overall, we are suffering from lack of data. The estimates for groups with small sample sizes may behave weirdly.
+
+
+```{r, fig.height= 10, fig.width= 8 }
+res = res %>%
+  arrange(desc(schools))
+res %>%
+  kable()
+lvl = res$county
+
+math %>%
+  mutate(county = factor(county, levels = lvl)) %>%
+  # filter(county %in% counties[1:10]) %>%
+  ggplot(aes(x = percentms, y = factor(metstandard), color = factor(metstandard))) +
+  geom_point() +
+  facet_wrap(~county, ncol = 5) +
+  theme(legend.position = 'top')
+
+
+par(mfrow = c(7,5), mar = c(2,1.8,2,0.1))
+for(i in 1:(nrow(res)-4)) {
+  b0 = res$b0[i]
+  b1 = res$b1[i]
+  center = -b0/b1
+  if(0.05/abs(b1)>0.01&0.05/abs(b1)<1e5) {
+    s = seq(0.1, 100 * round(0.05/abs(b1), 2), 0.1)
+  } else {
+    s = seq(0.001, 1, 0.001) 
+  }
+  x = c(center-rev(s), center, center+s)
+  if(0.05/abs(b1)>1e5) x = seq(-5,5,0.1)
+  gamma = b0+b1*x
+  pi = exp(gamma)/(1+exp(gamma))
+  plot(x, pi, ylim = c(0,1), xlab = '', ylab = '', main = res$county[i], type = 'l')
+}
+```
+
+
+```{r}
+dt = res %>%
+  filter(schools>=10) %>% 
+  dplyr::select(b0,b1)
+(theta.hat = colMeans(dt))
+(Sigma.hat = cov(dt))
+```
+
+
+c) Formulate a unit information prior distribution for $\theta$ and $\Sigma$ based on the observed data. Specifically, let $\theta\sim$ multivariate normal$( \hat\theta,\hat\Sigma )$ and let $\Sigma^{-1}$ Wishart$(4, \hat\Sigma^{-1})$. Use a Metropolis-Hastings algorithm to approximate the joint posterior distribution of all parameters.
+
+\ 
+
+As the diagram in a) shows, the data connect to the global paramters $\theta, \Sigma$ only through $\beta_j$, so we have the following form of joint density
+
+$$
+p(y,\beta_1,...,\beta_J,\theta,\Sigma|X)=\prod_{j=1}^J\left\{p(y_j|\beta_j,X_j)p(\beta_j|\theta,\Sigma)\right\}p(\theta,\Sigma)
+$$
+
+We can use different terms in this joint density to derive the full conditional in Gibbs sampler or calculate the proposal acceptance rate in Metropolis Hastings.
+
+## Gibbs steps for $(\theta, \Sigma)$
+
+$$
+\begin{split}
+p(\theta|\beta,\Sigma)&\propto p(\theta)\prod_{j=1}^mp(\beta_j|\theta,\Sigma)\\
+&\propto\mathcal N((\hat\Sigma^{-1}+m\Sigma^{-1})^{-1}(\hat\Sigma^{-1}\hat\theta+m\Sigma^{-1}\bar\beta),(\hat\Sigma^{-1}+m\Sigma^{-1})^{-1})
+\end{split}
+$$
+where $\bar \beta=1/m\sum_{j=1}^m\beta_j$
+
+$$
+\begin{split}
+p(\Sigma|\beta,\theta)&\propto p(\Sigma)\prod_{j=1}^mp(\beta_j|\theta,\Sigma)\\
+&\propto \mathcal N(m+4,\hat\Sigma+S_\beta)
+\end{split}
+$$
+where $S_\beta=\sum_{j=1}^m(\beta_j-\theta)(\beta_j-\theta)^T$
+
+## Metropolis step for $\beta_j$
+
+For $\beta_j$, I used Metropolis-Hastings to sample from its posteior.
+
+The Metropolis-Hastings implementation is given as the following
+
+```{r, include=FALSE}
+# J = nrow(res)
+# rprop = function() {
+#   theta = rmvnorm(1, theta.hat, Sigma.hat)
+#   Sigma = solve(rWishart(1, 4, solve(Sigma.hat))[,,1])
+#   # beta = rmvnorm(J, theta.hat, Sigma.hat)
+#   beta = rmvnorm(J, rep(1,2), diag(1,2))
+#   return(
+#     list(theta=theta, Sigma=Sigma, beta=beta)
+#   )
+# }
+# 
+# ldprop = function(prop) {
+#   theta = prop$theta
+#   Sigma = prop$Sigma
+#   beta = prop$beta
+#   ldtheta = dmvnorm(theta, rep(1,2), diag(1,2), log = TRUE)
+#   ldSigma = dwish(solve(Sigma), 4, solve(Sigma.hat)) %>% log
+#   ldbeta = apply(beta, 1, function(x) {
+#     dmvnorm(x, theta.hat, Sigma.hat, log = TRUE)
+#   }) %>% sum
+#   return((ldtheta+ldSigma+ldbeta))
+# }
+# 
+# math_p = math %>%
+#   group_by(county) %>%
+#   mutate(n = n()) %>%
+#   arrange(desc(n))
+# 
+# X = math_p$percentms
+# y = math_p$metstandard
+# expit = function(x) {exp(x)/(1+exp(x))}
+# cts = res$county
+# 
+# lf = function(para) {
+#   theta = para$theta
+#   Sigma = para$Sigma
+#   beta = para$beta
+#   # the density of beta and Sigma cancel with proposal
+#   ldtheta = dmvnorm(theta, theta.hat, Sigma.hat, log = TRUE)
+#   ldSigma = dwish(solve(Sigma), 4, solve(Sigma.hat)) %>% log
+#   ldbeta = apply(beta, 1, function(x) {
+#     dmvnorm(x, theta, Sigma, log = TRUE)
+#   }) %>% sum
+#   ll = 0
+#   for(i in 1:J) {
+#     ind = math_p$county == cts[i]
+#     yi = y[ind]
+#     Xi = X[ind]
+#     betai = beta[i,]
+#     pi = expit(beta[1]+beta[2]*Xi)
+#     ll = ll + sum(log(pi^yi*(1-pi)^(1-yi)))
+#   }
+#   return((ll+ldtheta+ldSigma+ldbeta))
+# }
+# 
+# # initial values
+# theta = theta.hat
+# Sigma = Sigma.hat
+# beta = res %>% dplyr::select(b0,b1)
+# beta[is.na(beta)] = 0
+# para = list(theta = theta, Sigma = Sigma, beta = as.matrix(beta))
+# 
+# B = 500
+# S = 1000
+# Theta = NULL
+# SIGMA = NULL
+# Beta = NULL
+# Para = NULL
+# for(t in 1:(S+B)) {
+#   print(t)
+#   prop = rprop()
+#   logr = lf(prop) - ldprop(prop) + ldprop(para) - lf(para)
+#   exp(logr)
+#   log(runif(1))<logr
+#   # para = ifelse(log(runif(1))<logr, prop, para)
+#   if(runif(1)<logr) {
+#     para = prop
+#   }
+#   Para = c(Para, list(para))
+# }
+```
+
+```{r}
+m = length(unique(math$county))
+theta = theta.hat
+Sigma = Sigma.hat
+beta = rep(theta.hat, m) %>% matrix(ncol = m) + matrix(rnorm(2 * m), nrow = 2)
+lambda = 3
+cts = math$county
+math_sp = math %>% 
+  mutate(county = as.factor(county)) %>%
+  split(.$county)
+
+
+MH = function(theta, Sigma, beta){
+  # update theta using Gibbs
+  theta_cov = solve(solve(Sigma.hat) + m * solve(Sigma))
+  bar_beta = rowMeans(beta)
+  theta_mean = theta_cov %*% (solve(Sigma.hat) %*% theta.hat + m * solve(Sigma) %*% bar_beta)
+  theta = rmvnorm(1, theta_mean, theta_cov)
+  # update Sigma using Gibbs
+  S_beta = sweep(beta, 1, theta, "-") %>% {. %*% t(.)}
+  Sigma = solve(rWishart(1, m + 4, solve(Sigma + S_beta))[, , 1])
+  # update beta using MH
+  accep_count = 0
+  for (j in 1:m){
+    betaj = beta[, j]
+    log_prior = - 1 / 2 * (betaj - theta) %*% solve(Sigma) %*% t(betaj - theta)
+    gammaj = c((math_sp[[j]] %>% mutate(one = 1) %>% dplyr::select(one, percentms) %>% as.matrix()) %*% betaj)
+    log_sample = sum(math_sp[[j]]$metstandard * gammaj - log(1 + exp(gammaj)))
+    betaj_ = rmvnorm(1, betaj, lambda * Sigma.hat)[1, ]
+    log_prior_ = - 1 / 2 * (betaj_ - theta) %*% solve(Sigma) %*% t(betaj_ - theta)
+    gammaj_ = c((math_sp[[j]] %>% mutate(one = 1) %>% dplyr::select(one, percentms) %>% as.matrix()) %*% betaj_)
+    log_sample_ = sum(math_sp[[j]]$metstandard * gammaj_ - log(1 + exp(gammaj_)))
+    log_u = log_prior_ + log_sample_ - log_prior - log_sample
+    if (log(runif(1))<log_u) {
+      accep_count = accep_count + 1
+      beta[, j] = betaj_
+    }
+  }
+  return(list(accep_count = accep_count, theta = theta, Sigma = Sigma, beta = beta))
+}
+
+B = 250
+N = 1250
+# theta_sam = matrix(NA, 2, N %/% 3)
+# Sigma_sam = array(NA, c(2, 2, N %/% 3))
+# beta_sam = array(NA, c(2, m, N %/% 3))
+theta_sam = matrix(NA, 2, N)
+Sigma_sam = array(NA, c(2, 2, N))
+beta_sam = array(NA, c(2, m, N))
+accep_ratio = 0
+for (k in 1:N){
+  result = MH(theta, Sigma, beta)
+  accep_ratio = accep_ratio + result$accep_count
+  theta = result$theta
+  Sigma = result$Sigma
+  beta = result$beta
+  theta_sam[, k] = theta
+  Sigma_sam[, , k] = Sigma
+  beta_sam[, , k] = beta
+}
+(accep_ratio = accep_ratio / N / m)
+```
+
+
+d) Make plots of the samples of $\theta$ and $\Sigma$ (5 parameters) versus MCMC iteration number. Make sure you run the chain long enough so that your MCMC samples are likely to be a reasonable approximation to the posterior distribution.
+
+```{r}
+theta_sam = theta_sam[,(B+1):N]
+Sigma_sam = Sigma_sam[,,(B+1):N]
+beta_sam = beta_sam[,,(B+1):N]
+ggplot_df = data.frame(x = 1:(N-B), p1 = theta_sam[1, ],
+                       p2 = theta_sam[2, ], p3 = Sigma_sam[1, 1, ],
+                       p4 = Sigma_sam[1, 2, ], p5 = Sigma_sam[2, 2, ])
+g1 = ggplot(ggplot_df, aes(x = x, y = p1)) + geom_line() +
+  xlab("iteration number") + ylab(expression(theta[1]))
+g2 = ggplot(ggplot_df, aes(x = x, y = p2)) + geom_line() +
+  xlab("iteration number") + ylab(expression(theta[2]))
+g3 = ggplot(ggplot_df, aes(x = x, y = p3)) + geom_line() +
+  xlab("iteration number") + ylab(expression(Sigma[11]))
+g4 = ggplot(ggplot_df, aes(x = x, y = p4)) + geom_line() +
+  xlab("iteration number") + ylab(expression(Sigma[12]))
+g5 = ggplot(ggplot_df, aes(x = x, y = p5)) + geom_line() +
+  xlab("iteration number") + ylab(expression(Sigma[22]))
+grid.arrange(grobs = list(g1, g2, g3, g4, g5), ncol = 2)
+```
+
+The traceplot is given as above.
+
+e) Obtain posterior expectations of $\beta_j$ for each group j, plot $E[\beta_{0,j} |y]+ E[\beta_{1,j} |y]x$ as a function of x for each county, compare to the plot in b) and describe why you see any differences between the two sets of
+regression lines.
+
+```{r, fig.height= 10, fig.width= 8 }
+res2 = sapply(1:m, function(i) {rowMeans(beta_sam[, i, ])}) %>%
+t() %>% data.frame()
+rownames(res2) = cts%>%unique
+colnames(res2) = c("b0", "b1")
+kable(res2)
+
+par(mfrow = c(8,5), mar = c(2,1.8,2,0.1))
+for(i in 1:(nrow(res2))) {
+  b0 = res2$b0[i]
+  b1 = res2$b1[i]
+  b0_ = res[res$county==counties[i],]$b0
+  b1_ = res[res$county==counties[i],]$b1
+  center = -b0/b1
+  if(0.05/abs(b1)>0.01&0.05/abs(b1)<1e5) {
+    s = seq(0.1, 100 * round(0.05/abs(b1), 2), 0.1)
+  } else {
+    s = seq(0.001, 1, 0.001) 
+  }
+  x = c(center-rev(s), center, center+s)
+  if(0.05/abs(b1)>1e5) x = seq(-5,5,0.1)
+  gamma = b0+b1*x
+  gamma_ = b0_ + b1_ *x
+  pi = exp(gamma)/(1+exp(gamma))
+  pi_ = exp(gamma_)/(1+exp(gamma_))
+  plot(x, pi, ylim = c(0,1), xlab = '', ylab = '', main = res$county[i], type = 'l')
+  lines(x, pi_, col =2)
+}
+
+par(mfrow = c(8,5), mar = c(2,1.8,2,0.1))
+for(i in 1:(nrow(res2))) {
+  b0 = res2$b0[i]
+  b1 = res2$b1[i]
+  b0_ = res[res$county==counties[i],]$b0
+  b1_ = res[res$county==counties[i],]$b1
+  center = -b0/b1
+  if(0.05/abs(b1)>0.01&0.05/abs(b1)<1e5) {
+    s = seq(0.1, 100 * round(0.05/abs(b1), 2), 0.1)
+  } else {
+    s = seq(0.001, 1, 0.001) 
+  }
+  x = c(center-rev(s), center, center+s)
+  if(0.05/abs(b1)>1e5) x = seq(-5,5,0.1)
+  gamma = b0+b1*x
+  gamma_ = b0_ + b1_ *x
+  plot(x, gamma, xlab = '', ylab = '', main = res$county[i], type = 'l')
+  lines(x, gamma_, col =2)
+}
+```
+
+
+From the plots, we can find that with our proposed model, the regression lines are somewhat pulled towards the global 'regression line' shared by all the counties, accounting for the effect of the presence of global parameter $\theta,\Sigma$.
+
+And with prior belief, the groups previously suffering from insufficient data now have a decent estimate as well. The coefficients are shrunk to small values.
+
+f) From your posterior samples, plot marginal posterior and prior densities of $\theta$ and the elements of $\Sigma$. Include your ad hoc estimates from b) in the plots. Discuss the evidence that the slopes or intercepts vary across groups.
+
+```{r, warning=FALSE, message=FALSE}
+plot_all = function(MC_prior, MC_post, ad_hoc, x_lab){
+x_seq1 = density(MC_prior)$x
+prior_seq = density(MC_prior)$y
+x_seq2 = density(MC_post)$x
+post_seq = density(MC_post)$y
+
+prior_df = data.frame(x = x_seq1, y = prior_seq, typ = "prior")
+post_df = data.frame(x = x_seq2, y = post_seq, typ = "posterior")
+adhoc_df = data.frame(x = rep(ad_hoc, 2), y = c(0, max(prior_seq, post_seq)), typ = "ad hoc")
+bind_rows(prior_df, post_df, adhoc_df) %>%
+mutate(typ = as.factor(typ)) %>%
+ggplot(aes(x = x, y = y, col = typ)) +
+geom_line() +
+xlab(x_lab) +
+ylab("density") %>%
+return()
+}
+# use MC for marginal prior
+set.seed(0)
+MC_theta = rmvnorm(10000, theta.hat, Sigma.hat)
+MC_Sigma = rWishart(10000, 4, solve(Sigma.hat)) %>%
+{lapply(1:10000, function(i) {solve(.[, , i])})}
+MC_theta1 = MC_theta[, 1]
+MC_theta2 = MC_theta[, 2]
+MC_Sigma11 = MC_Sigma %>% sapply(function(S) {S[1, 1]}) 
+MC_Sigma12 = MC_Sigma %>% sapply(function(S) {S[1, 2]}) 
+MC_Sigma22 = MC_Sigma %>% sapply(function(S) {S[2, 2]}) 
+
+grid.arrange(
+plot_all(MC_theta1, theta_sam[1, ], theta.hat[1], expression(theta[1])),
+plot_all(MC_theta2, theta_sam[2, ], theta.hat[2], expression(theta[2])),
+plot_all(MC_Sigma11, Sigma_sam[1, 1, ], Sigma.hat[1, 1], expression(Sigma[11])),
+plot_all(MC_Sigma12, Sigma_sam[1, 2, ], Sigma.hat[1, 2], expression(Sigma[12])),
+plot_all(MC_Sigma22, Sigma_sam[2, 2, ], Sigma.hat[2, 2], expression(Sigma[22])),
+ncol = 2
+)
+```
+

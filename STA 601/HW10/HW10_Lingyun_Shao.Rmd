@@ -1,0 +1,75 @@
+---
+title: 'STA 601 Homework 9'
+author: 'Lingyun Shao'
+date: 'Nov. 21, 2018'
+output: pdf_document
+---
+
+```{r setup, include=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(knitr)
+library(mvtnorm)
+library(purrr)
+library(MASS)
+library(MCMCpack)
+library(invgamma)
+```
+
+# 10.1
+Reflecting random walks: It is often useful in MCMC to have a proposal distribution which is both symmetric and has support only on a certain region. For example, if we know $\theta$ > 0, we would like our proposal distribution $J(\theta_1|\theta_0)$ to have support on positive $\theta$ values. Consider the following proposal algorithm:
+
+- sample $\tilde \theta\sim$ uniform($\theta_0-\delta, \theta_0 + \delta$);
+
+- if $\tilde \theta < 0$, set $\theta_1 = -\tilde\theta$;
+
+- if $\tilde \theta\geq0$, set $\theta_1 = \tilde\theta$.
+
+In other words, $\theta_1$ = $|\tilde\theta|$. Show that the above algorithm draws samples from a symmetric proposal distribution which has support on positive values of $\theta$. It may be helpful to write out the associated proposal density $J(\theta_1|\theta_0)$ under the two conditions $\theta_0\leq\delta$ and $\theta_0>\delta$ separately.
+
+\ 
+
+Since we are getting our proposed sample $\theta_1=|\tilde \theta|\geq0$, it's straightforward that the proposal distribution has support on positive values.
+
+\ 
+
+For symmetry, notice that the symmetry in Metropolis algorithm is defined as $J(x|y)=J(y|x)$. According to the proposal algorithm given above, we can easily write down the proposal density as the following:
+
+$$
+J(\theta_1|\theta_0)=\begin{cases}\frac{1}{\delta},&\theta_0\leq\delta,0\leq\theta_1\leq\delta-\theta_0\\\frac{1}{2\delta},&\theta_0\leq\delta,\delta-\theta_0\leq\theta_1\leq\theta_0+\delta\\\frac{1}{2\delta},&\theta_0>\delta,\theta_0-\delta\leq\theta_1\leq\theta_0+\delta\\0,&o.w.\end{cases}
+$$
+
+For $\left\{\theta_0\leq\delta,0\leq\theta_1\leq\delta-\theta_0\right\}$, which is the same as $\left\{0<\theta_0,0<\theta_1,\theta_0+\theta_1\leq\delta\right\}$, it's the triangular area constrained by vertices $(0,0),(0,\delta),(\delta,0)$.
+
+For $\left\{\theta_0\leq\delta,\delta-\theta_0\leq\theta_1\leq\theta_0+\delta\right\}$, it's the triangular area constrained by vertices $(0,\delta),(\delta,0),(0,2\delta)$.
+
+For $\left\{\theta_0>\delta,\theta_0-\delta\leq\theta_1\leq\theta_0+\delta\right\}$, it's the area constrained by lines $\theta_0=\delta,\theta_1=\theta_0-\delta,\theta_1=\theta_0+\delta$ (the convex area).
+
+If we regard the density as a bivariate function, and draw the areas for each condition respectively on a $\theta_1\ vs\ \theta_0$ coordinates, we can have the following density plot
+
+```{r, fig.height=6.5}
+plot(NA, xlim = c(-.5,2), ylim = c(-.5, 2), axes = FALSE,
+     ylab = '', xlab = '')
+abline(v=0)
+abline(h=0)
+segments(0,1,1,0)
+polygon(x = c(0,0,1), 
+        y = c(0,1,0),
+        col = "steelblue")
+segments(0,1,10,11)
+segments(1,0,11,10)
+polygon(x = c(0,1,12,11), 
+        y = c(1,0,11,12),
+        col = "slategray1")
+text(0.25, 0.25, expression(frac(1,delta)))
+text(1, 1, expression(frac(1,paste(2, delta))))
+text(1, -0.15, expression(delta))
+text(-0.15, 1, expression(delta))
+text(2, -0.15, expression(theta[0]))
+text(-0.15, 2, expression(theta[1]))
+abline(a=0,b=1, lty = 2)
+```
+
+As is shown in the plot, we know that the support areas with probability densities are symmetric about $\theta_0=\theta_1$ line, which means that in the $\theta_1\ vs\ \theta_0$ space, the proposal distribution is completely identical if we switch $\theta_0$ and $\theta_1$. Therefore, we have verified that the proposal distribution $J(\theta_1|\theta_0)$ is symmetric, i.e. $J(\theta_1|\theta_0)=J(\theta_0|\theta_1)$.

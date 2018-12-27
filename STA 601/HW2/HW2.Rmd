@@ -1,0 +1,232 @@
+---
+title: "STA 601 Homework 2"
+author: "Lingyun Shao"
+date: "Sep. 12, 2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE)
+library(ggplot2)
+library(dplyr)
+library(knitr)
+```
+
+## 3.1
+Sample survey: Suppose we are going to sample 100 individuals from a county (of size much larger than 100) and ask each sampled person whether they support policy $Z$ or not. Let $Y_i = 1$ if person $i$ in the sample supports the policy, and $Y_i = 0$ otherwise.
+
+  a) Assume $Y_1, \cdots , Y_{100}$ are, conditional on $\theta$, i.i.d. binary random variables with expectation $\theta$. Write down the joint distribution of $Pr(Y_1 = y_1, \cdots , Y_{100} = y_{100}|\theta)$ in a compact form. Also write down the form of $Pr(\sum Y_i = y|\theta)$.
+
+Since $Y_i$ is a binary variable, it follows a Bernoulli distribution with parameter $\theta$. Given $\theta$, $Y_i,\cdots,Y_{100}$ are i.i.d., so we have
+
+\begin{align*}
+&Pr(Y_1=y_1,\cdots,Y_{100}=y_{100}|\theta)\\
+=&Pr(Y_1=y_1|\theta)\cdots Pr(Y_{100}=y_{100}|\theta)\\
+=&\theta^{y_1}(1-\theta)^{1-y_1}\cdots\theta^{y_{100}}(1-\theta)^{1-y_{100}}\\
+=&\Pi_{i=1}^{100}\theta^{y_i}(1-\theta)^{1-y_i}\\
+=&\theta^{\Sigma y_i}(1-\theta)^{100-\Sigma y_i}
+\end{align*}
+
+Obivously, $\sum Y_i\sim Binom(100,\theta)$, so we have
+
+\begin{align*}
+&Pr(\sum Y_i=y|\theta)\\
+=&\binom{100}{y}\theta^y(1-\theta)^{100-y}
+\end{align*}
+
+\ 
+
+  b) For the moment, suppose you believed that $\theta \in \left\{0.0, 0.1, \cdots, 0.9, 1.0\right\}$. Given that the results of the survey were $\sum_{i=1}^{100}Y_i=57$, compute $Pr(\sum Y_i=57|\theta)$ for each of these 11 values of $\theta$ and plot these probabilities as a function of $\theta$.
+
+```{r}
+n=100 #sample size
+y=57 #sum of yi
+#computing
+theta_dis = seq(0, 1, by = 0.1)
+l_dis = dbinom( y, 100, theta_dis)
+df_dis = data.frame(theta=theta_dis, likelihood=l_dis)
+l_dis = df_dis$likelihood #prob for each theta
+names(l_dis) = c('theta=0',theta_dis[-1])
+round(l_dis, 4)
+
+#draw plot
+ggplot(df_dis,aes(x=theta, y=likelihood)) +
+  geom_bar(stat = 'identity') + 
+  labs(title = '(a) Pr(Y=57|theta)') +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+\ 
+
+  c) Now suppose you originally had no prior information to believe one of these $\theta$-values over another, and so $Pr(\theta = 0.0) = Pr(\theta = 0.1) = \cdots = Pr(\theta = 0.9) = Pr(\theta = 1.0)$. Use Bayes¡¯ rule to compute $p(\theta|\sum_{i=1}^{100}Y_i=57)$ for each $\theta$-value. Make a plot of this posterior distribution as a function of $\theta$.
+
+\ 
+
+According to Bayes' rule
+
+$$p(\theta|\sum_{i=1}^{100}Y_i=57)=\frac{Pr(\theta)Pr(\sum_{i=1}^{100}Y_i=57|\theta)}{\sum_{\Theta} Pr(\theta)Pr(\sum_{i=1}^{100}Y_i=57|\theta)}$$
+
+we can compute the posterior probability in R
+
+```{r}
+#computing
+df_dis=df_dis %>%
+  mutate(prior = rep(1/length(theta), length(theta))) %>%
+  mutate(posterior = likelihood * prior/sum(likelihood * prior))
+pos_dis = df_dis$posterior
+names(pos_dis) = c('theta=0',theta_dis[-1])
+round(pos_dis, 4) #posterior prob of each theta
+
+#draw plot
+ggplot(df_dis, aes(theta, posterior)) +
+  geom_bar(stat = 'identity') + 
+  labs(title = '(b) Posterior pmf of theta') +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+\ 
+
+  d) Now suppose you allow $\theta$ to be any value in the interval $[0, 1]$. Using the uniform prior density for $\theta$, so that $p(\theta) = 1$, plot the posterior density $p(\theta) \times Pr(\sum_{i=1}^n Y_i = 57|\theta)$ as a function of $\theta$.
+  
+\newpage
+
+According to Bayes' rule
+
+\begin{align*}
+&p(\theta|\sum_{i=1}^{100}Y_i=57)\\
+=&\frac{p(\theta)Pr(\sum_{i=1}^{100}Y_i=57|\theta)}{\int_{\Theta} p(\theta)Pr(\sum_{i=1}^{100}Y_i=57|\theta)d\theta}\\
+\propto&\theta^{57}(1-\theta)^{43}
+\end{align*}
+
+Judging from the kernal of density, the posterior should follow $Beta(58,44)$
+
+```{r}
+#computing
+df_cont = data.frame(theta = seq(0, 1, by=0.01))
+df_cont = df_cont %>%
+  mutate(prior = dbeta(theta, 1, 1)) %>% 
+  mutate(likelihood = dbinom(y, n, theta)) %>%
+  mutate(p_times_l = prior * likelihood)
+
+#draw plot
+ggplot(df_cont, aes(theta, p_times_l)) +
+  geom_line() + 
+  labs(title = '(c) p(theta) x Pr (y|theta)') +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+\ 
+
+  e) As discussed in this chapter, the posterior distribution of $\theta$ is $beta(1+57,1+100-57)$. Plot the posterior density as a function of $\theta$. Discuss the relationships among all of the plots you have made for this exercise.
+
+```{r}
+#computing
+a = 1 + y # parameter 1 of posterior
+b = 1 + n - y # parameter 2 of posterior
+df_cont = df_cont %>%
+  mutate(posterior = dbeta(theta, a, b))
+
+#draw plot
+ggplot(df_cont, aes(theta, posterior)) +
+  geom_line() + 
+  labs(title = '(d) Posterior pdf of theta') +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+Plot (a) and (b) are both based on the prior belief that $\theta \in \left\{0.0,0.1,\cdots,0.9,1.0\right\}$. Plot (a) is the probability of $\sum Y_i=57$ given each $\theta$. Plot (b) is the posterior pmf, which is derived by updating our prior belief using the information in plot (a) (observed data). Specifically, we need to use Bayes' Rule to calculate the posterior probability of each $\theta$.
+
+
+Plot (c) and (d) are both based on the prior belief $\theta\sim Uniform(0,1)$. In plot (c), the value of function $p(\theta) \times Pr(\sum_{i=1}^nY_i=57|\theta)$ indicates our posterior belief of $\theta$, but it is not a posterior pdf since the integral over the support of $\theta$ is not equal to 1. However, we can simply get the result of plot (d) by normalizing the function in plot (c) to make its integral equal to 1. Specifically, we can dividing the values in plot (c) with $\int_\Theta p(\theta) \times Pr(\sum_{i=1}^nY_i=57|\theta)d\theta$. Plot (d) is the posterior pdf of $\theta$.
+
+\ 
+
+## 3.2
+Sensitivity analysis: It is sometimes useful to express the parameters a and b in a beta distribution in terms of $\beta_0 = a/(a + b)$ and $n_0 = a + b$, so that $a = \theta_0n_0$ and $b = (1 - \theta_0)n_0$. Reconsidering the sample survey data in Exercise 3.1, for each combination of $\theta_0\in \left\{0.1, 0.2, \cdots , 0.9\right\}$ and $n_0 \in \left\{1, 2, 8, 16, 32\right\}$ find the corresponding a, b values and compute $Pr(\theta >0.5|\sum Y_i=57)$ using a $beta(a, b)$ prior distribution for $\theta$. Display the results with a contour plot, and discuss how the plot could be used to explain to someone whether or not they should believe that $\theta > 0.5$, based on the data that $\sum_{i=1}^{100} Y_i = 57$.
+
+\ 
+
+
+```{r}
+theta0 = seq(0.1, 0.9, by=0.1) #prior mean
+n0 = c(1, 2, 8, 16, 32) #prior 'sample size'
+a = n0 %*% t(theta0) #prior parameter 1
+b = n0 %*% t(1 - theta0) #prior parameter 2
+cname = c('theta0=0.1',seq(0.2, 0.9, by = 0.1))
+rname = c('n0=1',2,8,16,32)
+colnames(a) = cname
+rownames(a) = rname
+colnames(b) = cname
+rownames(b) = rname
+kable(a, caption = 'values of a') #display of a
+kable(b, caption = 'values of b') #display of b
+z=pbeta(0.5, a+y, b+n-y, lower.tail = FALSE) #posterior prob of theta>0.5
+contour(n0,theta0,z,col=gray(0.3),
+        lwd=2, main = 'Contour of Pr(theta>0.5|Y=57)',
+        xlab ='n0', ylab = 'theta0')
+```
+
+
+As the contour shows, when our prior weight, $n_0$ is very large and prior mean, $\theta_0$ is small, the the posterior probability of $Pr(\theta>0.5|\sum Y_i=57)$ is small and we should not believe $\theta>0.5$. However, as long as our prior belief $\theta_0$ is not too small, $Pr(\theta>0.5|\sum Y_i=57)$ will be quite large and we should believe that $\theta>0.5$ given $\sum Y_i=57$. 
+
+Basically because the sample mean $\bar Y=0.57$ is larger than 0.5, so either when our prior belief $\theta_0>0.5$, then our posterior belief will definitely be in favor of $\theta>0.5$, or when our prior belief $\theta_0<0.5$, then only a small $\theta_0$ and large $n_0$ may drive us away from believing $\theta>0.5$ given $\sum Y_i=57$.
+
+\ 
+
+## Math Problem
+
+Verify the following
+$$B(a,b)=\frac{\Gamma(a)\Gamma(b)}{\Gamma(a+b)} \tag{1}$$
+
+where $B(a,b)=\int_0^1\theta^{a-1}(1-\theta)^{b-1}d\theta$ and $\Gamma(a)=\int_0^\infty x^{a-1}e^{-x}dx$.
+
+\ 
+
+### Proof 1:
+
+$$\Gamma(a)\Gamma(b)=\int_0^\infty t^{a-1}e^{-t}dt\int_0^\infty s^{a-1}e^{-s}ds$$
+
+Let $t=z\theta,\ s=z(1-\theta)$, then $t+s=z$. Since $t\in(0,\infty),\ s\in(0,\infty)$ so $z\in(0,\infty),\ \theta\in(0,1)$.
+$J(z,\theta)=
+\left|\begin{matrix}
+\frac{\partial t}{\partial z}&\frac{\partial t}{\partial \theta}\\
+\frac{\partial s}{\partial z}&\frac{\partial s}{\partial \theta}\\
+\end{matrix}\right|=-z$
+
+\begin{align*}
+&\Gamma(a)\Gamma(b)\\
+=&\int_0^\infty t^{a-1}e^{-t}dt\int_0^\infty s^{b-1}e^{-s}ds\\
+=&\int_0^1\int_0^\infty(z\theta)^{a-1}(z(1-\theta))^{b-1}e^{-z}|J|dzd\theta\\
+=&\int_0^\infty z^{a+b-1}e^{-z}dz \int_0^1 \theta^{a-1}(1-\theta)^{b-1}d\theta\\
+=&\Gamma(a+b)B(a,b)
+\end{align*}
+
+Thus, we have proved $B(a,b)=\frac{\Gamma(a)\Gamma(b)}{\Gamma(a+b)}$.
+
+\ 
+
+### Proof 2:
+
+Let $x=t^2,\ t>0$, $x\in(0,\infty)$, so $t\in(0,\infty)$. By substituting $x$ with $t^2$, we can have the equivalent expression of $\Gamma(a)$
+
+$$\Gamma(a)=\int_0^\infty t^{2a-2}e^{-t^2}dt^2 = 2\int_0^\infty t^{2a-1}e^{-t^2}dt \tag{2}$$
+
+Using the form of $\Gamma(a)$ in (2), then the right hand side of (1) is
+
+
+$$\frac{\Gamma(a)\Gamma(b)}{\Gamma(a+b)}=\frac{4 \int_0^\infty x^{2a-1}e^{-x^2}dx \int_0^\infty y^{2b-1}e^{-y^2}dy} {2\int_0^\infty x^{2a+2b-1}e^{-x^2}dx}=\frac{2 \int_0^\infty\int_0^\infty x^{2a-1}y^{2b-1}e^{-x^2-y^2}dxdy} {\int_0^\infty x^{2a+2b-1}e^{-x^2}dx}$$
+
+Let $x=r\cos(\theta),\ y=r\sin(\theta),\ \theta\in[0,2\pi],\ r\in(0,\infty)$, then $J(r,\theta)=
+\left|\begin{matrix}
+\frac{\partial x}{\partial r}&\frac{\partial x}{\partial \theta}\\
+\frac{\partial y}{\partial r}&\frac{\partial y}{\partial \theta}\\
+\end{matrix}\right|=r$
+
+\begin{align*}
+&\frac{\Gamma(a)\Gamma(b)}{\Gamma(a+b)}\\
+=&\frac{2 \int_0^{2\pi}\int_0^\infty (r\cos\theta)^{2a-1}(r\sin\theta)^{2b-1}e^{-r^2}|J|drd\theta} {\int_0^\infty x^{2a+2b-1}e^{-x^2}dx}\\
+=&2\int_0^{2\pi}(\cos\theta)^{2a-1}(\sin\theta)^{2b-1}d\theta \frac{\int_0^\infty r^{2a+2b-1}e^{-r^2}dr} {\int_0^\infty x^{2a+2b-1}e^{-x^2}dx}\\
+=&2\int_0^{2\pi}(\cos\theta)^{2a-1}(\sin\theta)^{2b-1}d\theta\\
+=&\int_0^1(\cos^2\theta)^{a-1}(\sin^2\theta)^{b-1}d(\cos^2\theta)\\
+=&\int_0^1z^{a-1}(1-z)^{b-1}dz \quad\quad(\mathrm{let}\ z=\cos^2\theta)\\
+=&B(a,b)
+\end{align*}
