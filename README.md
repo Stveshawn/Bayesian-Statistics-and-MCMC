@@ -1,4 +1,3 @@
 # MCMC
-Practice in MCMC
 
-Duke STA601 based.
+Bayesian stuff I did at Duke.
